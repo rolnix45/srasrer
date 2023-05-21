@@ -25,8 +25,8 @@ sealed class Bullet
     
     public void Create(Vector2Di pos)
     {
-        this.position.Set(pos);
-        deltaX = 1000;
+        position.Set(pos);
+        deltaX = 1750;
         deltaY = 0;
     }
 }

@@ -1,4 +1,5 @@
 ﻿using Irrlicht;
+using Irrlicht.Core;
 using Irrlicht.Video;
 using nook.main;
 
@@ -6,45 +7,51 @@ namespace nook.entities.enemies;
 
 sealed class EnTest : Enemy
 {
-    private readonly Random rnd;
+    private static readonly log4net.ILog _logger =
+        log4net.LogManager.GetLogger(typeof(Enemy));
 
     private const UInt16 speed = 300;
-
+    public override Vector2Di position { get; }
+    public override UInt16 scale { get; protected init; }
 
     private readonly IrrlichtDevice device;
-    
-    public EnTest(Texture texture, IrrlichtDevice device) : base(texture)
+
+    private EnTest(Texture texture, IrrlichtDevice device) : base(texture)
     {
-        scale = 32;
-        rnd = new Random();
+        scale = 48;
+        position = new Vector2Di();
+        isAlive = true;
+        
         this.device = device;
     }
 
-    public void Spawn()
+    public static void SpawnEnTest(IrrlichtDevice device)
     {
-        position.X = Game.winWidth + 25;
-        position.Y = rnd.Next(scale, Game.winHeight - scale);
-        
-        EnemiesHandler.Enemies.Add(this);
-    }
+        Random rnd = new Random();
 
-    public override void Update(ref Player player)
+        var enTest = new EnTest(
+            device.VideoDriver.GetTexture(Game.debugPath + "assets/textures/enemy1.png"),
+            device)
+        {
+            position =
+            {
+                X = Game.winWidth + 25
+            }
+        };
+
+        enTest.position.Y = rnd.Next(enTest.scale, Game.winHeight - enTest.scale);
+        
+        EnemiesHandler.Enemies.Add(enTest);
+    }
+    
+    public override void Update(ref Player player, Enemy enemy)
     {
-        base.Update(ref player);
+        base.Update(ref player, enemy);
         if (position.X < 0 || !isAlive)
         {
             EnemiesHandler.Enemies.Remove(this);
             return;
         }
-        
-        /*
-        if (device.Timer.Time >= timeToSpawn)
-        {
-            timeToSpawn = device.Timer.Time + spawnRate;
-            _logger.Debug("spawned");
-            Spawn();
-        }
-        */
         
         position.X -= (int) (speed * Game.frameDeltaTime);
     }

@@ -2,11 +2,15 @@
 using Irrlicht.Core;
 using Irrlicht.Video;
 using nook.io;
+using nook.main;
 
 namespace nook.entities.enemies;
 
 class EnemiesHandler
 {
+    private static readonly log4net.ILog _logger =
+        log4net.LogManager.GetLogger(typeof(EnemiesHandler));
+    
     public static readonly List<Enemy> Enemies = new List<Enemy>();
 
     private readonly VideoDriver driver;
@@ -42,6 +46,13 @@ class EnemiesHandler
                     null,
                     Color.SolidWhite,
                     true
+                );
+                
+                if (!Game.showHitboxes) continue;
+                
+                driver.Draw2DRectangleOutline(
+                    new Recti(enemy.position, new Dimension2Di(enemy.scale)),
+                    Color.SolidRed
                 );
             }
             else

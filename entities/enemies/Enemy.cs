@@ -7,18 +7,17 @@ namespace nook.entities.enemies;
 abstract class Enemy
 {
     private static readonly log4net.ILog _logger =
-        log4net.LogManager.GetLogger(typeof(Player));
+        log4net.LogManager.GetLogger(typeof(Enemy));
     
     public Texture texture { get; }
-    public Vector2Di position { get; }
-    public UInt16 scale { get; protected init; }
+    public abstract Vector2Di position { get; }
+    public abstract UInt16 scale { get; protected init; }
 
     public bool isAlive { get; set; }
-    
+
     protected Enemy(Texture texture)
     {
         this.texture = texture;
-        position = new Vector2Di();
         isAlive = true;
     }
 
@@ -28,40 +27,41 @@ abstract class Enemy
         _logger.Debug("player dead");
     }
 
-    private void checkCollision(ref Player plr)
+    private void checkCollision(ref Player plr, Enemy enemy)
     {
         if (
-            plr.position.X < position.X + scale &&
-            plr.position.X + plr.scale > position.X &&
-            plr.position.Y < position.Y + scale &&
-            plr.position.Y + plr.scale > position.Y
+            plr.position.X < enemy.position.X + enemy.scale &&
+            plr.position.X + plr.scale > enemy.position.X &&
+            plr.position.Y < enemy.position.Y + enemy.scale &&
+            plr.position.Y + plr.scale > enemy.position.Y
         ) 
         {
             KillPlayer();
-            isAlive = false;
+            enemy.isAlive = false;
         }
     }
 
-    private void checkCollision(Bullet bullet)
+    private void checkCollision(Bullet bullet, Enemy enemy)
     {
         if (
-            bullet.position.X < position.X + scale &&
-            bullet.position.X + bullet.scale > position.X &&
-            bullet.position.Y < position.Y + scale &&
-            bullet.position.Y + bullet.scale > position.Y
+            bullet.position.X < enemy.position.X + enemy.scale &&
+            bullet.position.X + bullet.scale > enemy.position.X &&
+            bullet.position.Y < enemy.position.Y + enemy.scale &&
+            bullet.position.Y + bullet.scale > enemy.position.Y
         ) 
         {
             bullet.isAlive = false;
-            isAlive = false;
+            enemy.isAlive = false;
         }
     }
 
-    public virtual void Update(ref Player plr)
+    public virtual void Update(ref Player plr, Enemy enemy)
     {
-        checkCollision(ref plr);
+        checkCollision(ref plr, enemy);
+
         foreach (var bullet in Player.Bullets)
         {
-            checkCollision(bullet);
+            checkCollision(bullet, enemy);
         }
     }
 }

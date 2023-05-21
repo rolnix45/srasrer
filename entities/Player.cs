@@ -3,6 +3,7 @@ using Irrlicht.Core;
 using Irrlicht.Video;
 using nook.io;
 using nook.main;
+using Timer = System.Timers.Timer;
 
 namespace nook.entities;
 
@@ -12,8 +13,11 @@ sealed class Player
         log4net.LogManager.GetLogger(typeof(Player));
     
     public static readonly List<Bullet> Bullets = new List<Bullet>();
+
+    private readonly Texture mainTexture;
+    private readonly Texture emptyTexture;
     
-    private readonly Texture texture;
+    private Texture texture;
     public Vector2Di position { get; }
     public UInt16 scale { get; }
 
@@ -24,27 +28,35 @@ sealed class Player
     private const UInt16 fireRate = 250;
     private Int32 speedMul;
 
+    public bool useKeyboard { get; set; }
+
     public Player(IrrlichtDevice device) 
     {
         this.device = device;
         driver = device.VideoDriver; 
         
         texture = driver.GetTexture(Game.debugPath + "assets/textures/kutas.png");
+        emptyTexture = driver.GetTexture(Game.debugPath + "assets/textures/e.png");
+        mainTexture = texture;
+        
         scale = 64;
         position = new Vector2Di(100, (Game.winHeight / 2) - (scale / 2));
 
         speedMul = 600;
         Game.isPlayerAlive = true;
-        
+        useKeyboard = false;
+
+        device.CursorControl.Position = position;
+
+        Blink(5);
         _logger.Debug("player spawned");
     }
 
-    
     private void HandleBullets()
     {
         Bullet _bullet = new Bullet(ref driver);
 
-        if (Input.keys[(int)KeyCode.LControl] && device.Timer.Time >= nextTimeToFire)
+        if (Input.mouseLeft && device.Timer.Time >= nextTimeToFire)
         {
             nextTimeToFire = device.Timer.Time + fireRate;
             _bullet.Create(new Vector2Di(position.X + (scale / 2), position.Y + (scale / 4)));
@@ -64,11 +76,10 @@ sealed class Player
             }
         }
     }
-    
-    public void Update()
+
+    private void MoveKeyboard()
     {
         speedMul = Input.keys[(int)KeyCode.LShift] ? 600 : 400;
-        
         if (Input.keys[(int)KeyCode.KeyW])
         {
             position.Y -= (int) (speedMul * Game.frameDeltaTime);
@@ -84,10 +95,54 @@ sealed class Player
         }
         else if (Input.keys[(int)KeyCode.KeyD])
         {
-            position.X += (int) (speedMul * Game.frameDeltaTime);
+            position.X += (int)(speedMul * Game.frameDeltaTime);
+        }
+    }
+
+    private void MoveMouse()
+    {
+        Vector2Di centerizedPlayerPosition = new Vector2Di(
+            position.X + (scale / 2),
+            position.Y + (scale / 4)
+        );
+        centerizedPlayerPosition.Set(new Vector2Di().Interpolate(Input.mousePos, centerizedPlayerPosition, 0.075));
+        position.Set(centerizedPlayerPosition.X - (scale / 2), centerizedPlayerPosition.Y - (scale / 4));
+    }
+    
+    public void Update()
+    {
+        if (useKeyboard)
+        {
+            MoveKeyboard();
+        }
+        else
+        {
+            MoveMouse();
         }
         
         HandleBullets();
+    }
+
+    private bool isTextureEmpty;
+    public void Blink(UInt16 t)
+    {
+        Timer timer = new Timer(100);
+        timer.AutoReset = false;
+        timer.Elapsed += (_, _) =>
+        {
+            isTextureEmpty = !isTextureEmpty;
+            texture = isTextureEmpty
+                ? mainTexture
+                : emptyTexture;
+        };
+            
+        for (UInt16 b = 0; b <= t; b++)
+        {
+            timer.Start();
+        }
+
+        texture = mainTexture;
+        isTextureEmpty = false;
     }
 
     public void Draw()
@@ -102,18 +157,32 @@ sealed class Player
                 Color.SolidWhite,
                 true
             );
-        }
-
-        if (Game.isPlayerAlive)
-        {
-            driver.Draw2DImage(
-                texture,
-                position,
-                new Recti(0, 0, scale, scale),
-                null,
-                Color.SolidWhite,
-                true
+            
+            if (!Game.showHitboxes) continue;
+            
+            
+            driver.Draw2DRectangleOutline(
+                new Recti(bullet.position, new Dimension2Di(bullet.scale)),
+                Color.SolidMagenta
             );
         }
+
+        if (!Game.isPlayerAlive) return;
+        
+        driver.Draw2DImage(
+            texture,
+            position,
+            new Recti(0, 0, scale, scale),
+            null,
+            Color.SolidWhite,
+            true
+        );
+
+        if (!Game.showHitboxes) return;
+        
+        driver.Draw2DRectangleOutline(
+            new Recti(position, new Dimension2Di(scale)),
+            Color.SolidBlue
+        );
     }
 }
