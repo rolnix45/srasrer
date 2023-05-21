@@ -39,9 +39,8 @@ sealed class Game
     
     public Game(string[] args)
     {
-        _logger.Info("Starting...");
-        
         XmlConfigurator.Configure(File.OpenRead(debugPath + "log4net.config"));
+        _logger.Info("Starting...");
 
         IrrlichtCreationParameters parameters = new IrrlichtCreationParameters
         {
