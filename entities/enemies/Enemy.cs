@@ -4,40 +4,49 @@ using nook.main;
 
 namespace nook.entities.enemies;
 
+/* DEATH CAUSES
+ * 0 = BULLET
+ * 1 = COLLISION WITH PLAYER
+ */
+
 abstract class Enemy
 {
-    private static readonly log4net.ILog _logger =
+    protected static readonly log4net.ILog _logger =
         log4net.LogManager.GetLogger(typeof(Enemy));
     
-    public Texture texture { get; }
+    public abstract Texture texture { get; }
     public abstract Vector2Di position { get; }
-    public abstract UInt16 scale { get; protected init; }
+    public abstract UInt16 scale { get; }
 
-    public bool isAlive { get; set; }
+    public ushort health { get; set; }
 
-    protected Enemy(Texture texture)
+    private ushort deathCause;
+
+    private void checkCollision(Player plr, Bullet bullet)
     {
-        this.texture = texture;
-        isAlive = true;
+        if (
+            plr.position.X < bullet.position.X + bullet.scale &&
+            plr.position.X + plr.scale > bullet.position.X &&
+            plr.position.Y < bullet.position.Y + bullet.scale &&
+            plr.position.Y + plr.scale > bullet.position.Y
+        )
+        {
+            Game.KillPlayer();
+            bullet.isAlive = false;
+        }
     }
-
-    private void KillPlayer()
-    {
-        Game.isPlayerAlive = false;
-        _logger.Debug("player dead");
-    }
-
-    private void checkCollision(ref Player plr, Enemy enemy)
+    
+    private void checkCollision(Player plr, Enemy enemy)
     {
         if (
             plr.position.X < enemy.position.X + enemy.scale &&
             plr.position.X + plr.scale > enemy.position.X &&
             plr.position.Y < enemy.position.Y + enemy.scale &&
             plr.position.Y + plr.scale > enemy.position.Y
-        ) 
+        )
         {
-            KillPlayer();
-            enemy.isAlive = false;
+            Game.KillPlayer();
+            enemy.health--;
         }
     }
 
@@ -51,17 +60,26 @@ abstract class Enemy
         ) 
         {
             bullet.isAlive = false;
-            enemy.isAlive = false;
+            enemy.health--;
+            if (enemy.health == 0)
+            {
+                deathCause = 0;
+            }
         }
     }
 
-    public virtual void Update(ref Player plr, Enemy enemy)
+    public virtual void Update(Player plr, Enemy enemy)
     {
-        checkCollision(ref plr, enemy);
+        checkCollision(plr, enemy);
 
         foreach (var bullet in Player.Bullets)
         {
             checkCollision(bullet, enemy);
+        }
+
+        foreach (var bullet in EnemiesHandler.EnemyBullets.ToList())
+        {
+            checkCollision(plr, bullet);
         }
     }
 }

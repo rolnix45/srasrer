@@ -3,7 +3,6 @@ using Irrlicht.Core;
 using Irrlicht.Video;
 using nook.io;
 using nook.main;
-using Timer = System.Timers.Timer;
 
 namespace nook.entities;
 
@@ -13,6 +12,8 @@ sealed class Player
         log4net.LogManager.GetLogger(typeof(Player));
     
     public static readonly List<Bullet> Bullets = new List<Bullet>();
+
+    public static int score;
 
     private readonly Texture mainTexture;
     private readonly Texture emptyTexture;
@@ -35,8 +36,8 @@ sealed class Player
         this.device = device;
         driver = device.VideoDriver; 
         
-        texture = driver.GetTexture(Game.debugPath + "assets/textures/kutas.png");
-        emptyTexture = driver.GetTexture(Game.debugPath + "assets/textures/e.png");
+        texture = driver.GetTexture("assets/textures/kutas.png");
+        emptyTexture = driver.GetTexture("assets/textures/e.png");
         mainTexture = texture;
         
         scale = 64;
@@ -47,20 +48,23 @@ sealed class Player
         useKeyboard = false;
 
         device.CursorControl.Position = position;
-
-        Blink(5);
+        
+        Blink(8);
+        
+        score = 0;
+        
         _logger.Debug("player spawned");
     }
 
     private void HandleBullets()
     {
-        Bullet _bullet = new Bullet(ref driver);
+        PlayerBullet playerBullet = new PlayerBullet(ref driver);
 
         if (Input.mouseLeft && device.Timer.Time >= nextTimeToFire)
         {
             nextTimeToFire = device.Timer.Time + fireRate;
-            _bullet.Create(new Vector2Di(position.X + (scale / 2), position.Y + (scale / 4)));
-            Bullets.Add(_bullet);
+            playerBullet.Create(new Vector2Di(position.X + (scale / 2), position.Y + (scale / 4)));
+            Bullets.Add(playerBullet);
         }
 
         foreach (var bullet in Bullets.ToList())
@@ -123,26 +127,26 @@ sealed class Player
         HandleBullets();
     }
 
-    private bool isTextureEmpty;
-    public void Blink(UInt16 t)
+    private void Blink(UInt16 t)
     {
-        Timer timer = new Timer(100);
-        timer.AutoReset = false;
-        timer.Elapsed += (_, _) =>
+        async Task Blinking()
         {
-            isTextureEmpty = !isTextureEmpty;
-            texture = isTextureEmpty
-                ? mainTexture
-                : emptyTexture;
-        };
-            
-        for (UInt16 b = 0; b <= t; b++)
-        {
-            timer.Start();
+            await Task.Run(delegate
+            {
+                for (var i = 0; i <= t; i++)
+                {
+                    texture = emptyTexture;
+                    Task.Delay(75).Wait();
+                    texture = mainTexture;
+                    Task.Delay(75).Wait();
+                }
+            });
         }
 
-        texture = mainTexture;
-        isTextureEmpty = false;
+        if (Blinking().IsCompleted)
+        {
+            texture = mainTexture;
+        }
     }
 
     public void Draw()
@@ -159,7 +163,6 @@ sealed class Player
             );
             
             if (!Game.showHitboxes) continue;
-            
             
             driver.Draw2DRectangleOutline(
                 new Recti(bullet.position, new Dimension2Di(bullet.scale)),

@@ -3,14 +3,14 @@ using Irrlicht.Core;
 
 namespace nook.io;
 
-class Input
+sealed class Input
 {
     public static readonly bool[] keys = new bool[255];
     public static readonly Vector2Di mousePos = new Vector2Di();
     public static bool mouseLeft { get; private set;  }
     public static bool mouseRight { get; private set;  }
     public static bool mouseMiddle { get; private set;  }
-
+    
     public Input(IrrlichtDevice device)
     {
         device.OnEvent += evnt =>

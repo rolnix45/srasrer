@@ -16,10 +16,9 @@ sealed class Game
     private static readonly log4net.ILog _logger =
         log4net.LogManager.GetLogger(typeof(Game));
     
-    internal static readonly UInt16 winWidth = 1280;
-    internal static readonly UInt16 winHeight = 960;
+    internal static readonly ushort winWidth = 1280;
+    internal static readonly ushort winHeight = 960;
     internal static readonly double frameDeltaTime = 0.0166;
-    internal static string debugPath = "../../../";
     
     private readonly IrrlichtDevice device;
 
@@ -29,9 +28,11 @@ sealed class Game
     private readonly EnemiesHandler enmHandler;
 
     private readonly GUIFont font;
+    private readonly GUIFont bigFont;
     private readonly Texture background;
 
     private Player _player;
+    private Boss1 _boss1;
     
     public static bool isPlayerAlive = true;
     private bool showDebugInfo = true;
@@ -39,9 +40,8 @@ sealed class Game
     
     public Game(string[] args)
     {
+        XmlConfigurator.Configure(File.OpenRead("log4net.config"));
         _logger.Info("Starting...");
-        
-        XmlConfigurator.Configure(File.OpenRead(debugPath + "log4net.config"));
 
         IrrlichtCreationParameters parameters = new IrrlichtCreationParameters
         {
@@ -63,10 +63,12 @@ sealed class Game
         smgr = device.SceneManager;
         gui = device.GUIEnvironment;
 
-        font = gui.GetFont(debugPath + "assets/fonts/font.png");
-        background = driver.GetTexture(debugPath + "assets/textures/background.png");
+        font = gui.GetFont("assets/fonts/font.png");
+        bigFont = gui.GetFont("assets/fonts/bigFont.png");
+        background = driver.GetTexture("assets/textures/background.png");
 
         _player = new Player(device);
+        _boss1 = new Boss1(device, _player);
 
         enmHandler = new EnemiesHandler(driver);
 
@@ -107,9 +109,10 @@ sealed class Game
         font.Draw("FPS " + driver.FPS, new Vector2Di(5, 5), Color.SolidWhite);
         font.Draw("DLT " + frameDeltaTime, new Vector2Di(5, 20), Color.SolidWhite);
         font.Draw("PBU " + Player.Bullets.Count, new Vector2Di(5, 35), Color.SolidWhite);
-        font.Draw("ENM " + EnemiesHandler.Enemies.Count, new Vector2Di(5, 50), Color.SolidWhite);
-        font.Draw("POS " + _player.position.X + " " + _player.position.Y, new Vector2Di(5, 65), Color.SolidWhite);
-        font.Draw("TIM " + device.Timer.Time + " " + device.Timer.Time / 1000.0, new Vector2Di(5, 80), Color.SolidWhite);
+        font.Draw("EBU " + EnemiesHandler.EnemyBullets.Count, new Vector2Di(5, 50), Color.SolidWhite);
+        font.Draw("ENM " + EnemiesHandler.Enemies.Count, new Vector2Di(5, 65), Color.SolidWhite);
+        font.Draw("POS " + _player.position.X + " " + _player.position.Y, new Vector2Di(5, 80), Color.SolidWhite);
+        font.Draw("TIM " + device.Timer.Time, new Vector2Di(5, 95), Color.SolidWhite);
     }
     
     private void Draw()
@@ -123,6 +126,8 @@ sealed class Game
             DebugInfo();
         
         _player.Draw();
+        font.Draw("SCORE: " + Player.score, new Vector2Di(5, winHeight - 25), Color.SolidWhite);
+        
         enmHandler.Draw();
         
         smgr.DrawAll();
@@ -130,7 +135,48 @@ sealed class Game
         
         if (!isPlayerAlive)
         {
-            font.Draw("DEAD", new Vector2Di((winWidth / 2) - 32, (winHeight / 2) - 16), Color.SolidWhite);
+            bigFont.Draw("DEAD", new Vector2Di((winWidth / 2) - 32, (winHeight / 2) - 16), Color.SolidWhite);
+        }
+    }
+
+    public static void KillPlayer()
+    {
+        isPlayerAlive = false;
+        _logger.Debug("player dead");
+    }
+    
+    private void UpdateEnemies()
+    {
+        foreach (var enemy in EnemiesHandler.Enemies.ToList())
+        {
+            switch (enemy)
+            {
+                case Imposter b:
+                    b.canShoot = _boss1.health == 0;
+                    b.Update(_player, enemy);
+                    break;
+                case Boss1 b:
+                    b.Update(_player, enemy);
+                    break;
+            }
+        }
+
+        foreach (var bullet in EnemiesHandler.EnemyBullets.ToList())
+        {
+            switch (bullet.tag)
+            {
+                case "boss1" or "imposter":
+                    if (bullet.position.X > 0 && bullet.isAlive)
+                    {
+                        bullet.position.X += (int)(bullet.deltaX * Game.frameDeltaTime);
+                        bullet.position.Y += (int)(bullet.deltaY * Game.frameDeltaTime);
+                    }
+                    else
+                    {
+                        EnemiesHandler.EnemyBullets.Remove(bullet);
+                    }
+                    break;
+            }
         }
     }
     
@@ -147,11 +193,15 @@ sealed class Game
         {
             enmHandler.KillAllEnemiesAndBullets();
             _player = new Player(device);
+            _boss1 = new Boss1(device, _player);
+            boss1Spawned = false;
+            UpdateEnemies();
+            Player.score = 0;
         }
 
         if (Input.keys[(int)KeyCode.F1])
         {
-            isPlayerAlive = false;
+            KillPlayer();
         }
 
         if (Input.keys[(int)KeyCode.F3] && device.Timer.Time >= timeToSpawn)
@@ -164,14 +214,20 @@ sealed class Game
             showHitboxes = !showHitboxes;
         }
     }
-    
-    
+
+    private bool boss1Spawned;
     private void Spawn()
     {
         if (device.Timer.Time >= timeToSpawn)
         {
             timeToSpawn = device.Timer.Time + spawnRate;
-            EnTest.SpawnEnTest(device);
+            Imposter.SpawnImposter(device);
+        }
+
+        if (Player.score == 20 && !boss1Spawned)
+        {
+            _boss1.Spawn();
+            boss1Spawned = true;
         }
     }
     
@@ -181,21 +237,11 @@ sealed class Game
         
         if (!isPlayerAlive) return;
         
-        foreach (var enemy in EnemiesHandler.Enemies.ToList())
-        {
-            switch (enemy)
-            {
-                case EnTest b:
-                    b.Update(ref _player, enemy);
-                    break;
-            }
-        }
-
+        UpdateEnemies();
         Spawn();
         
         _player.Update();
     }
-
 
     private const double limitFPS = 1.0 / 60.0;
     public void Run()
