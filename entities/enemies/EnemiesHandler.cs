@@ -1,6 +1,7 @@
 ﻿using Irrlicht.Core;
 using Irrlicht.Video;
 using nook.main;
+using nook.scenes;
 
 namespace nook.entities.enemies;
 
@@ -50,7 +51,7 @@ sealed class EnemiesHandler
                 true
             );
             
-            if (!Game.showHitboxes) continue;
+            if (!GameScene.showHitboxes) continue;
             
             driver.Draw2DRectangleOutline(
                 new Recti(bullet.position, new Dimension2Di(bullet.scale)),
@@ -69,12 +70,25 @@ sealed class EnemiesHandler
                 true
             );
                 
-            if (!Game.showHitboxes) continue;
+            if (!GameScene.showHitboxes) continue;
                 
             driver.Draw2DRectangleOutline(
                 new Recti(enemy.position, new Dimension2Di(enemy.scale)),
                 Color.SolidRed
             );
+        }
+    }
+
+    public void Cleanup()
+    {
+        foreach (var enemy in Enemies)
+        {
+            enemy.Cleanup();
+        }
+
+        foreach (var bullet in EnemyBullets)
+        {
+            bullet.Cleanup();
         }
     }
 }

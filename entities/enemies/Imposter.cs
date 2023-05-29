@@ -13,7 +13,7 @@ sealed class Imposter : Enemy
     public override Texture texture { get; }
     public override Vector2Di position { get; }
     public override UInt16 scale { get; }
-
+    
     public bool canShoot { get; set; }
     
     // TODO: private Particle deathParticles;

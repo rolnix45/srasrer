@@ -19,4 +19,10 @@ abstract class Bullet
         var x = x1 - x2;
         return Math.Atan2(y, x);
     }
+
+    public void Cleanup()
+    {
+        texture.Drop();
+        position.Dispose();
+    }
 }

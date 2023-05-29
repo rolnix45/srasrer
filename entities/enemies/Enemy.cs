@@ -1,6 +1,9 @@
 ﻿using Irrlicht.Core;
 using Irrlicht.Video;
-using nook.main;
+using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
+using nook.audio;
+using nook.scenes;
 
 namespace nook.entities.enemies;
 
@@ -18,9 +21,13 @@ abstract class Enemy
     public abstract Vector2Di position { get; }
     public abstract UInt16 scale { get; }
 
-    public ushort health { get; set; }
+    private readonly CachedSound _soundHit = new ("assets/sounds/enemyHit.wav");
+    private readonly CachedSound _soundHitProt = new ("assets/sounds/enemyHitProt.wav");
 
-    private ushort deathCause;
+    public ushort health { get; set; }
+    public bool hasProtection;
+
+    //private ushort deathCause;
 
     private void checkCollision(Player plr, Bullet bullet)
     {
@@ -31,7 +38,7 @@ abstract class Enemy
             plr.position.Y + plr.scale > bullet.position.Y
         )
         {
-            Game.KillPlayer();
+            GameScene.KillPlayer();
             bullet.isAlive = false;
         }
     }
@@ -45,7 +52,7 @@ abstract class Enemy
             plr.position.Y + plr.scale > enemy.position.Y
         )
         {
-            Game.KillPlayer();
+            GameScene.KillPlayer();
             enemy.health--;
         }
     }
@@ -61,10 +68,7 @@ abstract class Enemy
         {
             bullet.isAlive = false;
             enemy.health--;
-            if (enemy.health == 0)
-            {
-                deathCause = 0;
-            }
+            AudioEngine.Instance.PlaySound(!hasProtection ? _soundHit : _soundHitProt);
         }
     }
 
@@ -81,5 +85,11 @@ abstract class Enemy
         {
             checkCollision(plr, bullet);
         }
+    }
+
+    public void Cleanup()
+    {
+        texture.Drop();
+        position.Dispose();
     }
 }

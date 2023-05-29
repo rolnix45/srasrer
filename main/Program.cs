@@ -5,9 +5,8 @@ using Irrlicht.Scene;
 using Irrlicht.Video;
 using log4net.Config;
 using nook.entities;
-using nook.entities.enemies;
 using nook.io;
-
+using nook.scenes;
 
 namespace nook.main;
 
@@ -18,25 +17,18 @@ sealed class Game
     
     internal static readonly ushort winWidth = 1280;
     internal static readonly ushort winHeight = 960;
-    internal static readonly double frameDeltaTime = 0.0166;
+    internal static double frameDeltaTime = 0.0166;
     
-    private readonly IrrlichtDevice device;
+    private readonly IrrlichtDevice _device;
 
-    private readonly VideoDriver driver;
-    private readonly SceneManager smgr;
-    private readonly GUIEnvironment gui;
-    private readonly EnemiesHandler enmHandler;
+    private readonly VideoDriver _driver;
+    private readonly SceneManager _sceneManager;
+    private readonly GUIEnvironment _guiEnv;
 
-    private readonly GUIFont font;
-    private readonly GUIFont bigFont;
-    private readonly Texture background;
-
-    private Player _player;
-    private Boss1 _boss1;
+    private readonly TitleScreen _titleScreen;
+    private readonly GameScene _scene;
     
-    public static bool isPlayerAlive = true;
-    private bool showDebugInfo = true;
-    public static bool showHitboxes { get; private set; }
+    public static State gameState { get; internal set; }
     
     public Game(string[] args)
     {
@@ -50,29 +42,24 @@ sealed class Game
             VSync = false,
             WindowSize = new Dimension2Di(winWidth, winHeight),
         };
-        
-        device = IrrlichtDevice.CreateDevice(parameters);
-        device.CursorControl.Visible = false;
-
-        // ReSharper disable once ObjectCreationAsStatement
-        new Input(device);
-
-        device.SetWindowCaption("sraczka");
-
-        driver = device.VideoDriver;
-        smgr = device.SceneManager;
-        gui = device.GUIEnvironment;
-
-        font = gui.GetFont("assets/fonts/font.png");
-        bigFont = gui.GetFont("assets/fonts/bigFont.png");
-        background = driver.GetTexture("assets/textures/background.png");
-
-        _player = new Player(device);
-        _boss1 = new Boss1(device, _player);
-
-        enmHandler = new EnemiesHandler(driver);
 
         ParseCliArguments(args);
+        
+        _device = IrrlichtDevice.CreateDevice(parameters);
+        _device.CursorControl.Visible = false;
+
+        // ReSharper disable once ObjectCreationAsStatement
+        new Input(_device);
+
+        _device.SetWindowCaption("sraczka");
+
+        _driver = _device.VideoDriver;
+        _sceneManager = _device.SceneManager;
+        _guiEnv = _device.GUIEnvironment;
+
+        _scene = new GameScene(_device);
+
+        _titleScreen = new TitleScreen(_device);
         
         _logger.Debug("DEBUG");
         _logger.Info("INFO");
@@ -89,6 +76,7 @@ sealed class Game
                       "F4 = Hitboxes\n" +
                       "hold some keys for while\n");
         Console.ForegroundColor = ConsoleColor.White;
+        gameState = State.Title;
     }
 
     private void ParseCliArguments(string[] args)
@@ -97,179 +85,97 @@ sealed class Game
         foreach (var arg in args)
         {
             _logger.Debug(arg);
-            if (arg == "--kbd")
-            {
-                _player.useKeyboard = true;
-            }
+                
+            Player.useKeyboard = arg == "--keyboard";
+
+            /*
+            (arg == "--fastmode" ? 0.0332 : 
+                (arg == "--slowmo" ? 0.0083 : 0.0166));
+            */
         }
     }
-    
-    private void DebugInfo()
-    {
-        font.Draw("FPS " + driver.FPS, new Vector2Di(5, 5), Color.SolidWhite);
-        font.Draw("DLT " + frameDeltaTime, new Vector2Di(5, 20), Color.SolidWhite);
-        font.Draw("PBU " + Player.Bullets.Count, new Vector2Di(5, 35), Color.SolidWhite);
-        font.Draw("EBU " + EnemiesHandler.EnemyBullets.Count, new Vector2Di(5, 50), Color.SolidWhite);
-        font.Draw("ENM " + EnemiesHandler.Enemies.Count, new Vector2Di(5, 65), Color.SolidWhite);
-        font.Draw("POS " + _player.position.X + " " + _player.position.Y, new Vector2Di(5, 80), Color.SolidWhite);
-        font.Draw("TIM " + device.Timer.Time, new Vector2Di(5, 95), Color.SolidWhite);
-    }
-    
+
     private void Draw()
     {
-        driver.Draw2DImage(
-            background,
-            new Vector2Di(0, 0)
-        );
+        switch (gameState)
+        {
+            case State.Running:
+                _scene.CommonDraw();
+                break;
+            case State.Dead:
+                _scene.CommonDraw();
+                _scene.DeadDraw();
+                break;
+            case State.Pause:
+                _scene.CommonDraw();
+                _scene.PausedDraw();
+                break;
+            case State.Title:
+                _titleScreen.Draw();
+                break;
+        }
         
-        if (showDebugInfo)
-            DebugInfo();
-        
-        _player.Draw();
-        font.Draw("SCORE: " + Player.score, new Vector2Di(5, winHeight - 25), Color.SolidWhite);
-        
-        enmHandler.Draw();
-        
-        smgr.DrawAll();
-        gui.DrawAll();
-        
-        if (!isPlayerAlive)
-        {
-            bigFont.Draw("DEAD", new Vector2Di((winWidth / 2) - 32, (winHeight / 2) - 16), Color.SolidWhite);
-        }
-    }
-
-    public static void KillPlayer()
-    {
-        isPlayerAlive = false;
-        _logger.Debug("player dead");
-    }
-    
-    private void UpdateEnemies()
-    {
-        foreach (var enemy in EnemiesHandler.Enemies.ToList())
-        {
-            switch (enemy)
-            {
-                case Imposter b:
-                    b.canShoot = _boss1.health == 0;
-                    b.Update(_player, enemy);
-                    break;
-                case Boss1 b:
-                    b.Update(_player, enemy);
-                    break;
-            }
-        }
-
-        foreach (var bullet in EnemiesHandler.EnemyBullets.ToList())
-        {
-            switch (bullet.tag)
-            {
-                case "boss1" or "imposter":
-                    if (bullet.position.X > 0 && bullet.isAlive)
-                    {
-                        bullet.position.X += (int)(bullet.deltaX * Game.frameDeltaTime);
-                        bullet.position.Y += (int)(bullet.deltaY * Game.frameDeltaTime);
-                    }
-                    else
-                    {
-                        EnemiesHandler.EnemyBullets.Remove(bullet);
-                    }
-                    break;
-            }
-        }
-    }
-    
-    private float timeToSpawn;
-    private const UInt16 spawnRate = 500;
-    private void Events()
-    {
-        if (Input.keys[(int)KeyCode.Esc])
-        {
-            device.Close();
-        }
-
-        if (Input.keys[(int)KeyCode.Backspace] && !isPlayerAlive)
-        {
-            enmHandler.KillAllEnemiesAndBullets();
-            _player = new Player(device);
-            _boss1 = new Boss1(device, _player);
-            boss1Spawned = false;
-            UpdateEnemies();
-            Player.score = 0;
-        }
-
-        if (Input.keys[(int)KeyCode.F1])
-        {
-            KillPlayer();
-        }
-
-        if (Input.keys[(int)KeyCode.F3] && device.Timer.Time >= timeToSpawn)
-        {
-            showDebugInfo = !showDebugInfo;
-        }
-
-        if (Input.keys[(int)KeyCode.F4] && device.Timer.Time >= timeToSpawn)
-        {
-            showHitboxes = !showHitboxes;
-        }
-    }
-
-    private bool boss1Spawned;
-    private void Spawn()
-    {
-        if (device.Timer.Time >= timeToSpawn)
-        {
-            timeToSpawn = device.Timer.Time + spawnRate;
-            Imposter.SpawnImposter(device);
-        }
-
-        if (Player.score == 20 && !boss1Spawned)
-        {
-            _boss1.Spawn();
-            boss1Spawned = true;
-        }
+        _sceneManager.DrawAll();
+        _guiEnv.DrawAll();
     }
     
     private void Update()
     {
-        Events();
-        
-        if (!isPlayerAlive) return;
-        
-        UpdateEnemies();
-        Spawn();
-        
-        _player.Update();
+        switch (gameState)
+        {
+            case State.Running:
+                _scene.Update();
+                break;
+            case State.Dead:
+                _scene.PausedEvents();
+                break;
+            case State.Pause:
+                _scene.PausedEvents();
+                break;
+            case State.Title:
+                _titleScreen.Update();
+                break;
+        }
     }
 
-    private const double limitFPS = 1.0 / 60.0;
+    /*
+     * DALEJ NIE PATRZEC
+     * BURDEL W CHUJ
+     */
+    private const double limitFPS = 1000.0 / 60.0;
     public void Run()
     {
-        smgr.AddCameraSceneNode(null, new Vector3Df(0, 0, -1), new Vector3Df());
+        _sceneManager.AddCameraSceneNode(null, new Vector3Df(0, 0, -1), new Vector3Df());
 
-        double lastTime = device.Timer.Time / 1000.0;
+        double lastTime = _device.Timer.Time;
         double timer = 0.0;
 
-        while (device.Run())
+        double then = _device.Timer.Time;
+        while (_device.Run())
         {
-            var nowTime = device.Timer.Time / 1000.0;
+            var nowTime = _device.Timer.Time;
             timer += (nowTime - lastTime) / limitFPS;
             lastTime = nowTime;
-
+            
             while (timer >= 1.0)
             {
+                var now = _device.Timer.Time;
+                frameDeltaTime = (now - then) / 1000.0;
+                then = now;
+                
                 Update();
                 
-                driver.BeginScene(ClearBufferFlag.All, Color.SolidBlack);
+                _driver.BeginScene(ClearBufferFlag.All, new Color(69, 34, 35));
                 Draw();
-                driver.EndScene();
+                _driver.EndScene();
 
                 timer--;
             }
         }
-
-        device.Drop();
+        
+        _device.Drop();
+        _titleScreen.Cleanup();
+        _scene.Cleanup();
         _logger.Info("Closing...");
     }
 }

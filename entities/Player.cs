@@ -3,6 +3,7 @@ using Irrlicht.Core;
 using Irrlicht.Video;
 using nook.io;
 using nook.main;
+using nook.scenes;
 
 namespace nook.entities;
 
@@ -29,7 +30,7 @@ sealed class Player
     private const UInt16 fireRate = 250;
     private Int32 speedMul;
 
-    public bool useKeyboard { get; set; }
+    public static bool useKeyboard { get; set; }
 
     public Player(IrrlichtDevice device) 
     {
@@ -44,14 +45,11 @@ sealed class Player
         position = new Vector2Di(100, (Game.winHeight / 2) - (scale / 2));
 
         speedMul = 600;
-        Game.isPlayerAlive = true;
         useKeyboard = false;
 
-        device.CursorControl.Position = position;
+        score = 0;
         
         Blink(8);
-        
-        score = 0;
         
         _logger.Debug("player spawned");
     }
@@ -60,7 +58,7 @@ sealed class Player
     {
         PlayerBullet playerBullet = new PlayerBullet(ref driver);
 
-        if (Input.mouseLeft && device.Timer.Time >= nextTimeToFire)
+        if (Input.IsLMBPressed() && device.Timer.Time >= nextTimeToFire)
         {
             nextTimeToFire = device.Timer.Time + fireRate;
             playerBullet.Create(new Vector2Di(position.X + (scale / 2), position.Y + (scale / 4)));
@@ -83,21 +81,21 @@ sealed class Player
 
     private void MoveKeyboard()
     {
-        speedMul = Input.keys[(int)KeyCode.LShift] ? 600 : 400;
-        if (Input.keys[(int)KeyCode.KeyW])
+        speedMul = Input.IsKeyDown(KeyCode.LShift) ? 600 : 400;
+        if (Input.IsKeyDown(KeyCode.KeyW))
         {
             position.Y -= (int) (speedMul * Game.frameDeltaTime);
         }
-        else if (Input.keys[(int)KeyCode.KeyS])
+        else if (Input.IsKeyDown(KeyCode.KeyS))
         {
             position.Y += (int) (speedMul * Game.frameDeltaTime);
         }
 
-        if (Input.keys[(int)KeyCode.KeyA])
+        if (Input.IsKeyDown(KeyCode.KeyA))
         {
             position.X -= (int) (speedMul * Game.frameDeltaTime);
         }
-        else if (Input.keys[(int)KeyCode.KeyD])
+        else if (Input.IsKeyDown(KeyCode.KeyD))
         {
             position.X += (int)(speedMul * Game.frameDeltaTime);
         }
@@ -146,6 +144,7 @@ sealed class Player
         if (Blinking().IsCompleted)
         {
             texture = mainTexture;
+            Blinking().Dispose();
         }
     }
 
@@ -162,7 +161,7 @@ sealed class Player
                 true
             );
             
-            if (!Game.showHitboxes) continue;
+            if (!GameScene.showHitboxes) continue;
             
             driver.Draw2DRectangleOutline(
                 new Recti(bullet.position, new Dimension2Di(bullet.scale)),
@@ -170,7 +169,7 @@ sealed class Player
             );
         }
 
-        if (!Game.isPlayerAlive) return;
+        if (Game.gameState == State.Dead) return;
         
         driver.Draw2DImage(
             texture,
@@ -181,11 +180,24 @@ sealed class Player
             true
         );
 
-        if (!Game.showHitboxes) return;
+        if (!GameScene.showHitboxes) return;
         
         driver.Draw2DRectangleOutline(
             new Recti(position, new Dimension2Di(scale)),
             Color.SolidBlue
         );
+    }
+
+    public void Cleanup()
+    {
+        foreach (var bullet in Bullets)
+        {
+            bullet.Cleanup();
+        }
+        
+        texture.Drop();
+        position.Dispose();
+        mainTexture.Drop();
+        emptyTexture.Drop();
     }
 }
